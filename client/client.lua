@@ -8,7 +8,7 @@ local cooldowntimer = 0
 -- Delete Entity
 local DeleteThis = function(horse)
     NetworkRequestControlOfEntity(horse)
-    SetEntityAsMissionEntity(riding, true, true)
+    SetEntityAsMissionEntity(horse, true, true)
 
     Wait(100)
 
@@ -25,9 +25,7 @@ local DeleteThis = function(horse)
     return false
 end
 
--------------------------------------------------------------------------------------------
 -- prompts and blips if needed
--------------------------------------------------------------------------------------------
 Citizen.CreateThread(function()
     for _, v in pairs(Config.SellWildHorseLocations) do
         exports['rsg-core']:createPrompt(v.location, v.coords, RSGCore.Shared.Keybinds[Config.Keybind], Lang:t('menu.open')..v.name, {
@@ -37,13 +35,14 @@ Citizen.CreateThread(function()
         })
         if v.showblip == true then
             local SellWildHorseBlip = Citizen.InvokeNative(0x554D9D53F696D002, 1664425300, v.coords)
-            SetBlipSprite(SellWildHorseBlip,  joaat(Config.Blip.blipSprite), true)
-            SetBlipScale(Config.Blip.blipScale, 0.2)
+            SetBlipSprite(SellWildHorseBlip, joaat(Config.Blip.blipSprite), true)
+            SetBlipScale(SellWildHorseBlip, Config.Blip.blipScale)
             Citizen.InvokeNative(0x9CB1A1623062F402, SellWildHorseBlip, Config.Blip.blipName)
         end
     end
 end)
 
+-- Sell Wild Horse Menu
 -- Sell Wild Horse Menu
 RegisterNetEvent('rsg-sellwildhorse:client:menu', function(name)
     if selling then return end
@@ -61,38 +60,36 @@ RegisterNetEvent('rsg-sellwildhorse:client:menu', function(name)
 
         return
     end
-    
+
     lib.registerContext(
-        {
-            id = 'sellhorse_menu',
-            title = name,
-            position = 'top-right',
-            options = {
-                {
-                    title = Lang:t('menu.sell_stored_horse'),
-                    description = Lang:t('text.sell_store_horse'),
-                    icon = 'fas fa-paw',
-                    event = 'rsg-sellwildhorse:client:sellhorse',
-                   
-                },
-                {
-                    title = Lang:t('menu.save_stored_horse'),
-                    description = Lang:t('text.save_store_horse'),
-                    icon = 'fas fa-paw',
-                    event = 'rms-wildhorsestable:client:wildhorsestable',
-                },
+            {
+                id = 'sellhorse_menu',
+                title = name,
+                position = 'top-right',
+                options = {
+                    {
+                        title = Lang:t('menu.sell_tamed_wild_horse'),
+                        description = Lang:t('text.sell_tamed_wild_horse'),
+                        icon = 'fas fa-paw',
+                        event = 'rsg-sellwildhorse:client:selltamedhorse',
+                    },
+                    {
+                        title = Lang:t('menu.save_stored_horse'),
+                        description = Lang:t('text.save_store_horse'),
+                        icon = 'fas fa-paw',
+                        event = 'rms-wildhorsestable:client:wildhorsestable',
+                    },
+                }
             }
-        }
     )
     lib.showContext('sellhorse_menu')
-    
 end)
 
--- Sell Horse Event
-AddEventHandler('rsg-sellwildhorse:client:sellhorse', function()
+-- Sell Tamed Wild Horse Event
+RegisterNetEvent('rsg-sellwildhorse:client:selltamedhorse')
+AddEventHandler('rsg-sellwildhorse:client:selltamedhorse', function()
     local ped = PlayerPedId()
     local horse = Citizen.InvokeNative(0xE7E11B8DCBED1058, ped)
-    local myhorse = exports['rsg-horses']:CheckActiveHorse()
     local model = GetEntityModel(horse)
     local owner = Citizen.InvokeNative(0xF103823FFE72BB49, horse)
     selling = true
@@ -124,13 +121,12 @@ AddEventHandler('rsg-sellwildhorse:client:sellhorse', function()
         return
     end
 
-    if myhorse and myhorse ~= 0 then
-        RSGCore.Functions.Notify(Lang:t('error.owned_horse'), 'error', 3000)
+    local isWild = Citizen.InvokeNative(0x3B005FF0538ED2A9, horse)
 
+    if isWild then
+        RSGCore.Functions.Notify('You can only sell tamed horses!', 'error', 3000)
         Wait(3000)
-
         selling = false
-
         return
     end
 
@@ -150,28 +146,28 @@ AddEventHandler('rsg-sellwildhorse:client:sellhorse', function()
             end
 
             RSGCore.Functions.Progressbar('sell-horse', Lang:t('progressbar.checking_horse')..name, Config.SellTime, false, true,
-            {
-                disableMovement = true,
-                disableCarMovement = false,
-                disableMouse = false,
-                disableCombat = true,
-            }, {}, {}, {}, function() -- Done
-                local deleted = DeleteThis(horse)
+                    {
+                        disableMovement = true,
+                        disableCarMovement = false,
+                        disableMouse = false,
+                        disableCombat = true,
+                    }, {}, {}, {}, function() -- Done
+                        local deleted = DeleteThis(horse)
 
-                if deleted then
-                    TriggerServerEvent('rsg-sellwildhorse:server:reward', rewardmoney, rewarditem)
+                        if deleted then
+                            TriggerServerEvent('rsg-sellwildhorse:server:reward', rewardmoney, rewarditem)
 
-                    Wait(3000)
+                            Wait(3000)
 
-                    selling = false
+                            selling = false
 
-                    if Config.EnableCooldown then
-                        TriggerEvent('rsg-sellwildhorse:client:Cooldown')
-                    end
+                            if Config.EnableCooldown then
+                                TriggerEvent('rsg-sellwildhorse:client:Cooldown')
+                            end
 
-                    return
-                end
-            end)
+                            return
+                        end
+                    end)
         end
     end
 
@@ -181,7 +177,7 @@ end)
 AddEventHandler('rsg-sellwildhorse:client:Cooldown', function()
     if cooldown then return end
 
-    CreateThread(function()
+    Citizen.CreateThread(function()
         cooldowntimer = Config.Cooldown
         cooldown = true
 
@@ -209,7 +205,7 @@ if Config.Debug then
         if mount then
             Citizen.InvokeNative(0xAEB97D84CDF3C00B, mount, true)
         end
-    end)
+    end) -- Added closing parenthesis here
 end
 
 -- Cleanup
@@ -233,28 +229,26 @@ AddEventHandler('onResourceStop', function(resourceName)
     end
 end)
 
----save Wild Horse to stables
-local RSGCore = exports['rsg-core']:GetCoreObject()
-
+-- Save Wild Horse to stables
 local createdEntries = {}
 local selling = false
 local cooldown = false
 local cooldowntimer = 0
 
--- Function to check if the horse is wild and untamed
-function CheckIfHorseIsWildAndUntamed(model)
-    -- Add your logic here to check if the horse is wild and untamed (e.g., check horse attributes)
-    return true -- Return true if wild and untamed, false if not
+-- Function to check if the horse is tamed
+function CheckIfHorseIsTamed(horse)
+    local isTamed = Citizen.InvokeNative(0xF103823FFE72BB49, horse)
+    
+    return isTamed -- Return true if tamed, false if not
 end
 
 -- Save Wild Horse Event (Client-Side)
 AddEventHandler('rms-wildhorsestable:client:wildhorsestable', function()
     local ped = PlayerPedId()
     local horse = Citizen.InvokeNative(0xE7E11B8DCBED1058, ped)
-    local myhorse = exports['rsg-horses']:CheckActiveHorse()
     local model = GetEntityModel(horse)
     local owner = Citizen.InvokeNative(0xF103823FFE72BB49, horse)
-    local player = source 
+    local player = source
 
     if Config.Debug then
         print("Rider    : "..tostring(ped))
@@ -275,15 +269,10 @@ AddEventHandler('rms-wildhorsestable:client:wildhorsestable', function()
         return
     end
 
-    if myhorse and myhorse ~= 0 then
-        RSGCore.Functions.Notify(Lang:t('error.owned_horse'), 'error', 3000)
-        Wait(3000)
-        return
-    end
+    local isTamed = CheckIfHorseIsTamed(horse)
 
-    -- Check if the horse is wild and untamed before saving
-    if not CheckIfHorseIsWildAndUntamed(model) then
-        RSGCore.Functions.Notify('You can only save wild and untamed horses!', 'error', 3000)
+    if not isTamed then
+        RSGCore.Functions.Notify('You can only save tamed horses!', 'error', 3000)
         Wait(3000)
         return
     end
@@ -294,8 +283,6 @@ AddEventHandler('rms-wildhorsestable:client:wildhorsestable', function()
 
     if horseName and gender then
         TriggerServerEvent('rms-wildhorsestable:server:WildHorseStable', model, horseName, gender)
-        
-        
     else
         RSGCore.Functions.Notify('Invalid horse name or gender.', 'error', 3000)
     end
@@ -339,4 +326,3 @@ AddEventHandler('onResourceStop', function(resourceName)
         end
     end
 end)
-
