@@ -176,40 +176,46 @@ AddEventHandler('rms-wildhorsestable:server:WildHorseStable', function(modelHash
         end
 
         -- Function to generate a unique horse ID
-        local function GenerateHorseid()
-            local seed = tonumber(tostring(os.time()):reverse():sub(1, 6)) -- Get a 6-digit timestamp-based seed
-            math.randomseed(seed)
-            local randomNum = math.random(10000, 99999)
-            return tostring(seed) .. tostring(randomNum)
-        end
+		-- generate horseid
+				local function GenerateHorseid()
+					local UniqueFound = false
+					local horseid = nil
+					while not UniqueFound do
+						horseid = tostring(RSGCore.Shared.RandomStr(3) .. RSGCore.Shared.RandomInt(3)):upper()
+						local result = MySQL.prepare.await("SELECT COUNT(*) as count FROM player_horses WHERE horseid = ?", { horseid })
+						if result == 0 then
+							UniqueFound = true
+						end
+					end
+					return horseid
+				end
 
         local horseid = GenerateHorseid()
 
 		-- Insert the wild horse into the 'player_horses' table as a wild horse, you are able to monitor how many horses are caught in the wild.
-		MySQL.Async.insert('INSERT INTO player_horses(citizenid, horseid, name, horse, gender, active, wild) VALUES(@citizenid, @horseid, @name, @horse, @gender, @active, @wild)', {
-			['@citizenid'] = Player.PlayerData.citizenid,
-			['@horseid'] = horseid,
-			['@name'] = horsename,
-			['@horse'] = modelName, -- Store the model name instead of the hash
-			['@gender'] = gender,
-			['@active'] = false,
-			['@wild'] = true,
-		}, function(inserted)
-			if inserted then
-				RSGCore.Functions.Notify(src, 'You have successfully saved a wild horse and used your saddle bag.', 'success', 3000)
-				
-				-- Trigger the client event to delete the horse entity
-				TriggerClientEvent('RSGCore:Command:DeleteVehicle', src)
-			  
-			else
-				RSGCore.Functions.Notify(src, 'Failed to save the wild horse. Please try again later.', 'error', 3000)
-				-- Add code for handling the case where the horse insertion fails, such as returning the item to the player.
-			end
-		end)
-    else
-        RSGCore.Functions.Notify(src, 'You need a saddlebag to save a wild horse.', 'error', 3000)
-    end
-end)
+			MySQL.Async.execute('INSERT INTO player_horses (citizenid, horseid, name, horse, gender, active, wild) VALUES (@citizenid, @horseid, @name, @horse, @gender, @active, @wild)', {
+				['@citizenid'] = Player.PlayerData.citizenid,
+				['@horseid'] = horseid,
+				['@name'] = horsename,
+				['@horse'] = modelHash,
+				['@gender'] = gender,
+				['@active'] = false,
+				['@wild'] = true -- Set the wild flag to true for wild horses
+			}, function(inserted)
+				if inserted > 0 then
+					RSGCore.Functions.Notify(src, 'You have successfully saved a wild horse and used your saddlebag.', 'success', 3000)
+					-- Trigger the client event to delete the horse entity
+					TriggerClientEvent('RSGCore:Command:DeleteVehicle', src)
+				else
+					RSGCore.Functions.Notify(src, 'Failed to save the wild horse. Please try again later.', 'error', 3000)
+					-- You may want to add code to handle the case where the horse insertion fails, such as returning the item to the player.
+				end
+			end)
+		else
+			RSGCore.Functions.Notify(src, 'You need a saddlebag to save a wild horse.', 'error', 3000)
+		end
+	end)
+
 
 --debug
 if Config.Debug then
